@@ -660,6 +660,66 @@ function createSectionContent(section) {
   };
 
   o = section.option(
+    form.DynamicList,
+    "source_include_ips",
+    _("Source IP Filter (Include)"),
+    _(
+      "Apply this section's routing rules ONLY for traffic originating from these IP addresses or subnets. " +
+        "Leave empty to apply rules to all source IPs. Cannot be used together with Source IP Filter (Exclude).",
+    ),
+  );
+  o.placeholder = "192.168.1.100 or 192.168.1.0/24";
+  o.rmempty = true;
+  o.depends("connection_type", "proxy");
+  o.depends("connection_type", "vpn");
+  o.depends("connection_type", "block");
+  o.depends("connection_type", "exclusion");
+  o.validate = function (section_id, value) {
+    // Optional
+    if (!value || value.length === 0) {
+      return true;
+    }
+
+    const validation = main.validateSubnet(value);
+
+    if (validation.valid) {
+      return true;
+    }
+
+    return validation.message;
+  };
+
+  o = section.option(
+    form.DynamicList,
+    "source_exclude_ips",
+    _("Source IP Filter (Exclude)"),
+    _(
+      "Apply this section's routing rules for ALL traffic EXCEPT from these IP addresses or subnets. " +
+        "Leave empty to apply rules to all source IPs. Cannot be used together with Source IP Filter (Include).",
+    ),
+  );
+  o.placeholder = "192.168.1.50";
+  o.rmempty = true;
+  o.depends("connection_type", "proxy");
+  o.depends("connection_type", "vpn");
+  o.depends("connection_type", "block");
+  o.depends("connection_type", "exclusion");
+  o.validate = function (section_id, value) {
+    // Optional
+    if (!value || value.length === 0) {
+      return true;
+    }
+
+    const validation = main.validateSubnet(value);
+
+    if (validation.valid) {
+      return true;
+    }
+
+    return validation.message;
+  };
+
+  o = section.option(
     form.Flag,
     "mixed_proxy_enabled",
     _("Enable Mixed Proxy"),
