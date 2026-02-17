@@ -665,7 +665,7 @@ function createSectionContent(section) {
     _("Source IP Filter (Include)"),
     _(
       "Apply this section's routing rules ONLY for traffic originating from these IP addresses or subnets. " +
-        "Leave empty to apply rules to all source IPs. Cannot be used together with Source IP Filter (Exclude).",
+        "Leave empty to apply rules to all source IPs. Can be combined with Exclude filter to create more complex filtering.",
     ),
   );
   o.placeholder = "192.168.1.100 or 192.168.1.0/24";
@@ -694,8 +694,8 @@ function createSectionContent(section) {
     "source_exclude_ips",
     _("Source IP Filter (Exclude)"),
     _(
-      "Apply this section's routing rules for ALL traffic EXCEPT from these IP addresses or subnets. " +
-        "Leave empty to apply rules to all source IPs. Cannot be used together with Source IP Filter (Include).",
+      "Do NOT apply this section's routing rules for traffic from these IP addresses or subnets. " +
+        "Leave empty to not exclude any source IPs. Can be combined with Include filter for complex filtering.",
     ),
   );
   o.placeholder = "192.168.1.50";
