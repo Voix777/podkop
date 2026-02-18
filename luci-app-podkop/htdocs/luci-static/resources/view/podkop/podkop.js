@@ -37,6 +37,7 @@ const EntryPoint = {
     );
     sectionsSection.anonymous = false;
     sectionsSection.addremove = true;
+    sectionsSection.sortable = true;
     sectionsSection.nodescriptions = true;
     sectionsSection.modaltitle = _("Edit Section");
 
