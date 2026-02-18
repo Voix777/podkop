@@ -37,7 +37,7 @@ const EntryPoint = {
     );
     sectionsSection.anonymous = false;
     sectionsSection.addremove = true;
-    sectionsSection.template = "cbi/simpleform";
+    sectionsSection.sortable = true;
 
     // Render section content
     section.createSectionContent(sectionsSection);
