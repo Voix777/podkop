@@ -7,6 +7,15 @@
 
 function createSectionContent(section) {
   let o = section.option(
+    form.Value,
+    "description",
+    _("Description"),
+    _("Optional description for this section"),
+  );
+  o.rmempty = true;
+  o.placeholder = _("Add description...");
+
+  o = section.option(
     form.ListValue,
     "connection_type",
     _("Connection Type"),
@@ -655,6 +664,27 @@ function createSectionContent(section) {
 
     return validation.message;
   };
+
+  o = section.option(
+    form.Value,
+    "source_summary",
+    _("Source"),
+  );
+  o.modalonly = false;
+  o.readonly = true;
+  o.rmempty = true;
+  o.cfgvalue = function (section_id) {
+    const uciGet = (key) => {
+      const raw = this.map.data.get("podkop", section_id, key);
+      return Array.isArray(raw) ? raw.filter(Boolean) : (raw ? [raw] : []);
+    };
+    const fullyRouted = uciGet("fully_routed_ips");
+    const include = uciGet("source_include_ips");
+    const exclude = uciGet("source_exclude_ips").map((v) => "!" + v);
+    const all = [...fullyRouted, ...include, ...exclude];
+    return all.length ? all.join(", ") : "";
+  };
+  o.write = function () {};
 
   o = section.option(
     form.DynamicList,
