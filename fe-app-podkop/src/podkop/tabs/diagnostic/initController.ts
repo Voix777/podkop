@@ -6,7 +6,6 @@ import { runFakeIPCheck } from './checks/runFakeIPCheck';
 import { loadingDiagnosticsChecksStore } from './diagnostic.store';
 import { logger, store, StoreType } from '../../services';
 import {
-  IRenderSystemInfoRow,
   renderAvailableActions,
   renderCheckSection,
   renderRunAction,
@@ -20,6 +19,7 @@ import { PODKOP_LUCI_APP_VERSION } from '../../../constants';
 import { showToast } from '../../../helpers/showToast';
 import { renderWikiDisclaimer } from './partials/renderWikiDisclaimer';
 import { runSectionsCheck } from './checks/runSectionsCheck';
+import { getPodkopVersionRow } from './helpers/getPodkopVersionRow';
 
 async function fetchSystemInfo() {
   const systemInfo = await PodkopShellMethods.getSystemInfo();
@@ -314,6 +314,43 @@ async function handleShowSingBoxConfig() {
   }
 }
 
+async function handleShowXrayConfig() {
+  const diagnosticsActions = store.get().diagnosticsActions;
+  store.set({
+    diagnosticsActions: {
+      ...diagnosticsActions,
+      showXrayConfig: { loading: true },
+    },
+  });
+
+  try {
+    const showXrayConfig = await PodkopShellMethods.showXrayConfig();
+
+    if (showXrayConfig.success) {
+      ui.showModal(
+        _('Show xray config'),
+        renderModal(
+          JSON.stringify(showXrayConfig.data, null, 2),
+          'show_xray_config',
+        ),
+      );
+    } else {
+      logger.error('[DIAGNOSTIC]', 'handleShowXrayConfig - e', showXrayConfig);
+      showToast(_('Failed to execute!'), 'error');
+    }
+  } catch (e) {
+    logger.error('[DIAGNOSTIC]', 'handleShowXrayConfig - e', e);
+    showToast(_('Failed to execute!'), 'error');
+  } finally {
+    store.set({
+      diagnosticsActions: {
+        ...diagnosticsActions,
+        showXrayConfig: { loading: false },
+      },
+    });
+  }
+}
+
 function renderWikiDisclaimerWidget() {
   const diagnosticsChecks = store.get().diagnosticsChecks;
 
@@ -402,6 +439,12 @@ function renderDiagnosticAvailableActionsWidget() {
       onClick: handleShowSingBoxConfig,
       disabled: atLeastOneServiceCommandLoading,
     },
+    showXrayConfig: {
+      loading: diagnosticsActions.showXrayConfig.loading,
+      visible: true,
+      onClick: handleShowXrayConfig,
+      disabled: atLeastOneServiceCommandLoading,
+    },
   });
 
   return preserveScrollForPage(() => {
@@ -415,53 +458,9 @@ function renderDiagnosticSystemInfoWidget() {
 
   const container = document.getElementById('pdk_diagnostic-page-system-info');
 
-  function getPodkopVersionRow(): IRenderSystemInfoRow {
-    const loading = diagnosticsSystemInfo.loading;
-    const unknown = diagnosticsSystemInfo.podkop_version === _('unknown');
-    const hasActualVersion =
-      Boolean(diagnosticsSystemInfo.podkop_latest_version) &&
-      diagnosticsSystemInfo.podkop_latest_version !== 'unknown';
-    const version = normalizeCompiledVersion(
-      diagnosticsSystemInfo.podkop_version,
-    );
-    const isDevVersion = version === 'dev';
-
-    if (loading || unknown || !hasActualVersion || isDevVersion) {
-      return {
-        key: 'Podkop',
-        value: version,
-      };
-    }
-
-    if (version !== `v${diagnosticsSystemInfo.podkop_latest_version}`) {
-      logger.debug(
-        '[DIAGNOSTIC]',
-        'diagnosticsSystemInfo',
-        diagnosticsSystemInfo,
-      );
-      return {
-        key: 'Podkop',
-        value: version,
-        tag: {
-          label: _('Outdated'),
-          kind: 'warning',
-        },
-      };
-    }
-
-    return {
-      key: 'Podkop',
-      value: version,
-      tag: {
-        label: _('Latest'),
-        kind: 'success',
-      },
-    };
-  }
-
   const renderedSystemInfo = renderSystemInfo({
     items: [
-      getPodkopVersionRow(),
+      getPodkopVersionRow(diagnosticsSystemInfo),
       {
         key: 'Luci App',
         value: normalizeCompiledVersion(PODKOP_LUCI_APP_VERSION),

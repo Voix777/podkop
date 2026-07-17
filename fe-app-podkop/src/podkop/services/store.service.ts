@@ -180,6 +180,7 @@ export interface StoreType {
     globalCheck: { loading: boolean };
     viewLogs: { loading: boolean };
     showSingBoxConfig: { loading: boolean };
+    showXrayConfig: { loading: boolean };
   };
   diagnosticsSystemInfo: {
     loading: boolean;

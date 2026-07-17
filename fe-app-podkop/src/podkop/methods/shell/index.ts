@@ -78,6 +78,8 @@ export const PodkopShellMethods = {
     callBaseMethod<unknown>(Podkop.AvailableMethods.GLOBAL_CHECK),
   showSingBoxConfig: async () =>
     callBaseMethod<unknown>(Podkop.AvailableMethods.SHOW_SING_BOX_CONFIG),
+  showXrayConfig: async () =>
+    callBaseMethod<unknown>(Podkop.AvailableMethods.SHOW_XRAY_CONFIG),
   checkLogs: async () =>
     callBaseMethod<unknown>(Podkop.AvailableMethods.CHECK_LOGS),
   getSystemInfo: async () =>

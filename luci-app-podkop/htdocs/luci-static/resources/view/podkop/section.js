@@ -22,6 +22,7 @@ function createSectionContent(section) {
     _("Select between VPN and Proxy connection methods for traffic routing"),
   );
   o.value("proxy", "Proxy");
+  o.value("proxy-xray", "Proxy (xray)");
   o.value("vpn", "VPN");
   o.value("block", "Block");
   o.value("exclusion", "Exclusion");
@@ -39,6 +40,19 @@ function createSectionContent(section) {
   o.value("outbound", _("Outbound Config"));
   o.default = "url";
   o.depends("connection_type", "proxy");
+
+  // proxy-xray: same field, but only url and outbound are supported
+  o = section.option(
+    form.ListValue,
+    "proxy_config_type",
+    _("Configuration Type"),
+    _("Select how to configure the xray proxy (Selector and URLTest are not supported)"),
+  );
+  o.modalonly = true;
+  o.value("url", _("Connection URL"));
+  o.value("outbound", _("Outbound Config"));
+  o.default = "url";
+  o.depends("connection_type", "proxy-xray");
 
   o = section.option(
     form.TextValue,
@@ -802,6 +816,17 @@ function createSectionContent(section) {
   o.modalonly = true;
   o.rmempty = false;
   o.depends("mixed_proxy_enabled", "1");
+
+  o = section.option(
+    form.Flag,
+    "resolve_real_ip_for_routing",
+    _("Resolve real IP for routing"),
+    _("Enable DNS resolve to get real IP when routing"),
+  );
+  o.default = "0";
+  o.rmempty = false;
+  o.depends("connection_type", "proxy");
+  o.depends("connection_type", "vpn");
 }
 
 const EntryPoint = {
