@@ -335,11 +335,7 @@ async function handleShowXrayConfig() {
         ),
       );
     } else {
-      logger.error(
-        '[DIAGNOSTIC]',
-        'handleShowXrayConfig - e',
-        showXrayConfig,
-      );
+      logger.error('[DIAGNOSTIC]', 'handleShowXrayConfig - e', showXrayConfig);
       showToast(_('Failed to execute!'), 'error');
     }
   } catch (e) {
