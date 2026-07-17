@@ -1132,8 +1132,8 @@ apply_source_ip_filters() {
                 while IFS= read -r ruleset; do
                     config=$(sing_box_cm_patch_route_rule "$config" "$exclude_rule_tag" "rule_set" "$ruleset")
                 done <<EOF
-                $(echo "$rule_sets" | jq -r '.[]')
-                EOF
+$(echo "$rule_sets" | jq -r '.[]')
+EOF
             fi
         fi
         
