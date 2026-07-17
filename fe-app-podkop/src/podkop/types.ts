@@ -42,6 +42,7 @@ export namespace Podkop {
   // show_version            Show podkop version
   // show_sing_box_config    Show sing-box configuration
   // show_sing_box_version   Show sing-box version
+  // show_xray_config        Show xray configuration
   // show_system_info        Show system information
   // get_status              Get podkop service status
   // get_sing_box_status     Get sing-box service status
@@ -63,6 +64,7 @@ export namespace Podkop {
     DISABLE = 'disable',
     GLOBAL_CHECK = 'global_check',
     SHOW_SING_BOX_CONFIG = 'show_sing_box_config',
+    SHOW_XRAY_CONFIG = 'show_xray_config',
     CHECK_LOGS = 'check_logs',
     GET_SYSTEM_INFO = 'get_system_info',
   }
@@ -113,6 +115,18 @@ export namespace Podkop {
     outbound_json: string;
   }
 
+  export interface ConfigProxyXrayUrlSection {
+    connection_type: 'proxy-xray';
+    proxy_config_type: 'url';
+    proxy_string: string;
+  }
+
+  export interface ConfigProxyXrayOutboundSection {
+    connection_type: 'proxy-xray';
+    proxy_config_type: 'outbound';
+    outbound_json: string;
+  }
+
   export interface ConfigVpnSection {
     connection_type: 'vpn';
     interface: string;
@@ -127,6 +141,8 @@ export namespace Podkop {
     | ConfigProxySelectorSection
     | ConfigProxyUrlSection
     | ConfigProxyOutboundSection
+    | ConfigProxyXrayUrlSection
+    | ConfigProxyXrayOutboundSection
     | ConfigVpnSection
     | ConfigBlockSection;
 

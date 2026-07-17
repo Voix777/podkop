@@ -314,6 +314,47 @@ async function handleShowSingBoxConfig() {
   }
 }
 
+async function handleShowXrayConfig() {
+  const diagnosticsActions = store.get().diagnosticsActions;
+  store.set({
+    diagnosticsActions: {
+      ...diagnosticsActions,
+      showXrayConfig: { loading: true },
+    },
+  });
+
+  try {
+    const showXrayConfig = await PodkopShellMethods.showXrayConfig();
+
+    if (showXrayConfig.success) {
+      ui.showModal(
+        _('Show xray config'),
+        renderModal(
+          JSON.stringify(showXrayConfig.data, null, 2),
+          'show_xray_config',
+        ),
+      );
+    } else {
+      logger.error(
+        '[DIAGNOSTIC]',
+        'handleShowXrayConfig - e',
+        showXrayConfig,
+      );
+      showToast(_('Failed to execute!'), 'error');
+    }
+  } catch (e) {
+    logger.error('[DIAGNOSTIC]', 'handleShowXrayConfig - e', e);
+    showToast(_('Failed to execute!'), 'error');
+  } finally {
+    store.set({
+      diagnosticsActions: {
+        ...diagnosticsActions,
+        showXrayConfig: { loading: false },
+      },
+    });
+  }
+}
+
 function renderWikiDisclaimerWidget() {
   const diagnosticsChecks = store.get().diagnosticsChecks;
 
@@ -400,6 +441,12 @@ function renderDiagnosticAvailableActionsWidget() {
       loading: diagnosticsActions.showSingBoxConfig.loading,
       visible: true,
       onClick: handleShowSingBoxConfig,
+      disabled: atLeastOneServiceCommandLoading,
+    },
+    showXrayConfig: {
+      loading: diagnosticsActions.showXrayConfig.loading,
+      visible: true,
+      onClick: handleShowXrayConfig,
       disabled: atLeastOneServiceCommandLoading,
     },
   });

@@ -50,6 +50,17 @@ SB_EXCLUSION_RULE_TAG="exclusion-rule-tag"
 # Experimental
 SB_CLASH_API_CONTROLLER_PORT=9090
 
+## xray (sidecar)
+XRAY_REQUIRED_VERSION="1.0.0"
+XRAY_CONFIG_PATH="/tmp/xray/config.json"
+TMP_XRAY_FOLDER="/tmp/xray"
+# Inbound (SOCKS5 listener that sing-box routes proxy-xray traffic to)
+XRAY_SOCKS_INBOUND_TAG="socks-in"
+XRAY_SOCKS_INBOUND_ADDRESS="127.0.0.1"
+XRAY_SOCKS_INBOUND_PORT=1603
+# Outbounds
+XRAY_FREEDOM_OUTBOUND_TAG="direct-out"
+
 ## Lists
 GITHUB_RAW_URL="https://raw.githubusercontent.com/itdoginfo/allow-domains/main"
 SRS_MAIN_URL="https://github.com/itdoginfo/allow-domains/releases/latest/download"

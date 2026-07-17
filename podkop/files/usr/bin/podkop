@@ -18,6 +18,8 @@ check_required_file "$PODKOP_LIB/nft.sh"
 check_required_file "$PODKOP_LIB/helpers.sh"
 check_required_file "$PODKOP_LIB/sing_box_config_manager.sh"
 check_required_file "$PODKOP_LIB/sing_box_config_facade.sh"
+check_required_file "$PODKOP_LIB/xray_config_manager.sh"
+check_required_file "$PODKOP_LIB/xray_config_facade.sh"
 check_required_file "$PODKOP_LIB/logging.sh"
 check_required_file "$PODKOP_LIB/rulesets.sh"
 . /lib/functions.sh
@@ -28,6 +30,8 @@ check_required_file "$PODKOP_LIB/rulesets.sh"
 . "$PODKOP_LIB/helpers.sh"
 . "$PODKOP_LIB/sing_box_config_manager.sh"
 . "$PODKOP_LIB/sing_box_config_facade.sh"
+. "$PODKOP_LIB/xray_config_manager.sh"
+. "$PODKOP_LIB/xray_config_facade.sh"
 . "$PODKOP_LIB/logging.sh"
 . "$PODKOP_LIB/rulesets.sh"
 
@@ -71,6 +75,22 @@ check_requirements() {
         log "Package 'coreutils-base64' version ($coreutils_base64_version) is lower than the required minimum ($COREUTILS_BASE64_REQUIRED_VERSION). This may cause issues when decoding base64 streams with missing padding, as automatic padding support is not available in older versions." "warn"
     fi
 
+    # xray check: only required when proxy-xray sections exist
+    if has_proxy_xray_section; then
+        if ! command -v xray > /dev/null 2>&1; then
+            log "Package 'xray' is not installed but proxy-xray sections are configured. Install xray: opkg update && opkg install xray-core. Aborted." "error"
+            exit 1
+        fi
+        local xray_version
+        xray_version="$(xray version 2>/dev/null | head -n1 | awk '{print $2}' | sed 's/^v//')"
+        if [ -n "$xray_version" ]; then
+            if ! is_min_package_version "$xray_version" "$XRAY_REQUIRED_VERSION"; then
+                log "Package 'xray' version ($xray_version) is lower than required ($XRAY_REQUIRED_VERSION). Aborted." "error"
+                exit 1
+            fi
+        fi
+    fi
+
     if grep -qE 'doh_backup_noresolv|doh_backup_server|doh_server' /etc/config/dhcp; then
         log "Detected https-dns-proxy in DHCP config. Edit /etc/config/dhcp" "error"
     fi
@@ -107,6 +127,21 @@ has_outbound_section() {
     return $section_exists
 }
 
+_check_proxy_xray_section() {
+    local section="$1"
+    local connection_type
+    config_get connection_type "$section" "connection_type"
+    if [ "$connection_type" = "proxy-xray" ]; then
+        proxy_xray_exists=0
+    fi
+}
+
+has_proxy_xray_section() {
+    local proxy_xray_exists=1
+    config_foreach _check_proxy_xray_section "section"
+    return $proxy_xray_exists
+}
+
 start_main() {
     log "Starting podkop"
 
@@ -135,6 +170,11 @@ start_main() {
     sing_box_init_config
     config_foreach add_cron_job "section"
     /etc/init.d/sing-box start
+
+    # xray sidecar (only when proxy-xray sections exist)
+    if has_proxy_xray_section; then
+        xray_start_sidecar
+    fi
 
     log "Nice"
     list_update &
@@ -171,6 +211,9 @@ stop_main() {
     if ip route list table "$RT_TABLE_NAME" > /dev/null 2>&1; then
         ip route flush table "$RT_TABLE_NAME"
     fi
+
+    log "Stop xray sidecar"
+    xray_stop_sidecar
 
     log "Stop sing-box"
     /etc/init.d/sing-box stop
@@ -579,15 +622,23 @@ sing_box_configure_service() {
 
 sing_box_init_config() {
     local config='{"log":{},"dns":{},"ntp":{},"certificate":{},"endpoints":[],"inbounds":[],"outbounds":[],"route":{},"services":[],"experimental":{}}'
+    # xray_config is a global-like variable written alongside config;
+    # it gets populated when proxy-xray sections are processed in configure_outbound_handler.
+    xray_config='{"log":{},"inbounds":[],"outbounds":[]}'
 
     sing_box_configure_log
     sing_box_configure_inbounds
-    sing_box_configure_outbounds
+    sing_box_configure_outbounds  # also populates xray_config for proxy-xray sections
     sing_box_configure_dns
     sing_box_configure_route
     sing_box_configure_experimental
     sing_box_additional_inbounds
     sing_box_save_config
+
+    # Save xray sidecar config if any proxy-xray sections were processed
+    if has_proxy_xray_section; then
+        xray_save_config
+    fi
 }
 
 sing_box_configure_log() {
@@ -750,6 +801,44 @@ configure_outbound_handler() {
         ;;
     block)
         log "Connection type 'block' detected for the $section section – no outbound will be created (handled via reject route rules)"
+        ;;
+    proxy-xray)
+        log "Configuring outbound in proxy-xray connection type for the $section section"
+        local proxy_config_type
+        config_get proxy_config_type "$section" "proxy_config_type"
+
+        case "$proxy_config_type" in
+        url)
+            log "Detected proxy-xray configuration type: url" "debug"
+            local proxy_string
+            config_get proxy_string "$section" "proxy_string"
+
+            if [ -z "$proxy_string" ]; then
+                log "Proxy string is not set for proxy-xray section. Aborted." "fatal"
+                exit 1
+            fi
+
+            # Add outbound to xray config
+            xray_config=$(xray_cf_add_proxy_outbound "$xray_config" "$section" "$proxy_string")
+            ;;
+        outbound)
+            log "Detected proxy-xray configuration type: outbound" "debug"
+            local json_outbound
+            config_get json_outbound "$section" "outbound_json"
+            xray_config=$(xray_cf_add_json_outbound "$xray_config" "$section" "$json_outbound")
+            ;;
+        *)
+            log "Unsupported proxy-xray configuration type: '$proxy_config_type' (only url and outbound are supported). Aborted." "fatal"
+            exit 1
+            ;;
+        esac
+
+        # In sing-box config: add a socks5 outbound pointing to xray's listener
+        # The tag matches the section so routing rules work transparently
+        local xray_section_tag
+        xray_section_tag="$(get_outbound_tag_by_section "$section")"
+        config=$(sing_box_cm_add_socks_outbound "$config" "$xray_section_tag" \
+            "$XRAY_SOCKS_INBOUND_ADDRESS" "$XRAY_SOCKS_INBOUND_PORT" "5")
         ;;
     exclusion)
         log "Connection type 'exclusion' detected for the $section section – no outbound will be created (handled via route rules)"
@@ -929,7 +1018,7 @@ configure_routing_for_section_lists() {
     config_get section_connection_type "$section" "connection_type"
 
     case "$section_connection_type" in
-    proxy | vpn)
+    proxy | vpn | proxy-xray)
         route_rule_tag="$(gen_id)"
         outbound_tag=$(get_outbound_tag_by_section "$section")
         config=$(sing_box_cm_add_route_rule "$config" "$route_rule_tag" "$SB_TPROXY_INBOUND_TAG" "$outbound_tag")
@@ -1355,6 +1444,81 @@ sing_box_config_check() {
     fi
 }
 
+# xray sidecar funcs
+
+xray_save_config() {
+    log "Save xray sidecar config to $XRAY_CONFIG_PATH"
+
+    mkdir -p "$TMP_XRAY_FOLDER"
+
+    local temp_file_path current_hash new_hash
+    temp_file_path="$(mktemp)"
+
+    # Add the SOCKS5 inbound and freedom outbound, then write
+    local full_config
+    full_config=$(xray_cm_add_socks_inbound "$xray_config" \
+        "$XRAY_SOCKS_INBOUND_TAG" "$XRAY_SOCKS_INBOUND_ADDRESS" "$XRAY_SOCKS_INBOUND_PORT")
+    full_config=$(xray_cm_add_freedom_outbound "$full_config" "$XRAY_FREEDOM_OUTBOUND_TAG")
+
+    local log_level
+    config_get log_level "settings" "log_level" "warn"
+    # Map sing-box log levels to xray levels
+    case "$log_level" in
+    debug) xray_log_level="debug" ;;
+    info)  xray_log_level="info" ;;
+    warn)  xray_log_level="warning" ;;
+    error) xray_log_level="error" ;;
+    *)     xray_log_level="warning" ;;
+    esac
+    full_config=$(xray_cm_configure_log "$full_config" "$xray_log_level")
+
+    echo "$full_config" | jq '.' > "$temp_file_path"
+
+    # Validate config
+    if ! xray -test -config "$temp_file_path" > /dev/null 2>&1; then
+        log "xray configuration is invalid. Aborted." "fatal"
+        cat "$temp_file_path" >&2
+        rm -f "$temp_file_path"
+        exit 1
+    fi
+
+    current_hash=$(md5sum "$XRAY_CONFIG_PATH" 2>/dev/null | awk '{print $1}')
+    new_hash=$(md5sum "$temp_file_path" | awk '{print $1}')
+    if [ "$current_hash" != "$new_hash" ]; then
+        log "xray configuration has changed and will be updated"
+        mv "$temp_file_path" "$XRAY_CONFIG_PATH"
+    else
+        log "xray configuration is unchanged"
+        rm -f "$temp_file_path"
+    fi
+}
+
+xray_start_sidecar() {
+    log "Starting xray sidecar"
+    if pgrep -f "xray.*$XRAY_CONFIG_PATH" > /dev/null 2>&1; then
+        log "xray sidecar already running, restarting" "debug"
+        xray_stop_sidecar
+    fi
+    xray run -config "$XRAY_CONFIG_PATH" &
+    echo $! > /var/run/podkop_xray.pid
+    log "xray sidecar started (pid $(cat /var/run/podkop_xray.pid))"
+}
+
+xray_stop_sidecar() {
+    if [ -f /var/run/podkop_xray.pid ]; then
+        local pid
+        pid=$(cat /var/run/podkop_xray.pid)
+        if kill -0 "$pid" 2>/dev/null; then
+            kill "$pid" 2>/dev/null
+            log "xray sidecar stopped (pid $pid)"
+        fi
+        rm -f /var/run/podkop_xray.pid
+    else
+        # Fallback: kill any stray xray process using our config
+        pkill -f "xray.*$XRAY_CONFIG_PATH" 2>/dev/null || true
+    fi
+}
+
 import_community_subnet_lists() {
     local section="$1"
     local community_lists
@@ -1612,7 +1776,7 @@ _determine_first_outbound_section() {
     local connection_type
     config_get connection_type "$section" "connection_type"
 
-    if [ "$connection_type" = "proxy" ] || [ "$connection_type" = "vpn" ]; then
+    if [ "$connection_type" = "proxy" ] || [ "$connection_type" = "vpn" ] || [ "$connection_type" = "proxy-xray" ]; then
         [ -z "$first_section" ] && first_section="$1"
     fi
 }
@@ -1908,6 +2072,38 @@ show_sing_box_config() {
             )
         else . end
     )' "$sing_box_config_path"
+}
+
+show_xray_config() {
+    nolog "Current xray sidecar configuration:"
+
+    if [ ! -f "$XRAY_CONFIG_PATH" ]; then
+        nolog "xray configuration file not found (no proxy-xray sections configured)"
+        return 1
+    fi
+
+    jq '
+    walk(
+        if type == "object" then
+            with_entries(
+                if .key == "id" then
+                    .value = "MASKED"
+                elif .key == "address" then
+                    .value = "MASKED"
+                elif .key == "password" then
+                    .value = "MASKED"
+                elif .key == "publicKey" then
+                    .value = "MASKED"
+                elif .key == "shortId" then
+                    .value = "MASKED"
+                elif .key == "fingerprint" then
+                    .value = "MASKED"
+                elif .key == "port" then
+                    .value = "MASKED"
+                else . end
+            )
+        else . end
+    )' "$XRAY_CONFIG_PATH"
 }
 
 show_config() {
@@ -2761,6 +2957,7 @@ Available commands:
     show_version            Show podkop version
     show_sing_box_config    Show sing-box configuration
     show_sing_box_version   Show sing-box version
+    show_xray_config        Show xray sidecar configuration
     show_system_info        Show system information
     get_status              Get podkop service status
     get_sing_box_status     Get sing-box service status
@@ -2824,6 +3021,9 @@ show_sing_box_config)
     ;;
 show_sing_box_version)
     show_sing_box_version
+    ;;
+show_xray_config)
+    show_xray_config
     ;;
 show_system_info)
     show_system_info

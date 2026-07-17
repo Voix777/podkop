@@ -1,0 +1,14 @@
+{
+	"mcpServers": {
+		"git": {
+			"command": "uvx",
+			"args": [
+				"mcp-server-git",
+				"--repository",
+				"/Users/voix/Yandex.Disk.localized/2.Code/podkop"
+			],
+			"disabled": false,
+			"alwaysAllow": []
+		}
+	}
+}
