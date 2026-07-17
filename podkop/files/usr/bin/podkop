@@ -1129,9 +1129,11 @@ apply_source_ip_filters() {
                 '.route.rules[] | select(.[$service_tag] == $tag) | .rule_set // []')
             
             if [ "$rule_sets" != "[]" ]; then
-                echo "$rule_sets" | jq -r '.[]' | while read -r ruleset; do
+                while IFS= read -r ruleset; do
                     config=$(sing_box_cm_patch_route_rule "$config" "$exclude_rule_tag" "rule_set" "$ruleset")
-                done
+                done <<EOF
+                $(echo "$rule_sets" | jq -r '.[]')
+                EOF
             fi
         fi
         
